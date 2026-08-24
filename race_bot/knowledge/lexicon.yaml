@@ -1,0 +1,305 @@
+# Vocabulary for the deterministic pre-filter. No model involved — this is
+# tuned by editing the lists, not by editing Python.
+
+# Phrases that mark a post as filler rather than race description.
+noise_markers:
+  - "brought to you by"
+  - "in partnership with"
+  - "subscribe"
+  - "sign up"
+  - "click here"
+  - "watch live on"
+  - "available to stream"
+  - "follow us on"
+  - "read more"
+  - "full report"
+  - "photo:"
+  - "image:"
+  - "getty images"
+  - "good morning"
+  - "good afternoon"
+  - "welcome to our live coverage"
+  - "welcome back to"
+  - "thanks for joining"
+  - "stay with us"
+  - "don't go anywhere"
+  - "quick reminder"
+  - "if you missed it"
+
+# Phrases that mark a post as a results/standings dump.
+result_markers:
+  - "general classification"
+  - "points classification"
+  - "mountains classification"
+  - "young rider classification"
+  - "top ten"
+  - "top 10"
+  - "intermediate sprint result"
+  - "stage result"
+  - "provisional result"
+  - "how they finished"
+
+# Words that make a post tactically interesting. Drives the salience score,
+# which decides what survives when the context window is full.
+tactical_cues:
+  - attack
+  - attacks
+  - attacking
+  - accelerat
+  - breakaway
+  - break away
+  - bridge
+  - bridging
+  - chase
+  - chasing
+  - counter
+  - crosswind
+  - echelon
+  - gap
+  - lead-out
+  - leadout
+  - lead out
+  - split
+  - splits
+  - tempo
+  - pull
+  - pulling
+  - drive
+  - driving
+  - swarm
+  - positioning
+  - position
+  - train
+  - wheel
+  - kick
+  - launch
+  - sprint
+  - surge
+  - drop
+  - dropped
+  - distanced
+  - caught
+  - reeled in
+  - closing
+  - closed
+  - advantage
+  - sector
+  - cobbles
+  - climb
+  - descent
+  - crash
+  - puncture
+  - mechanical
+  - grupetto
+  - peloton
+  - bunch
+  - solo
+  - flamme rouge
+  - final kilometre
+  - final kilometer
+  - gone clear
+  - goes clear
+  - go clear
+  - clear of
+  - off the front
+  - on the front
+  - up the road
+  - escape
+  - escapee
+  - slipped away
+  - gone away
+  - sits up
+  - sit up
+  - eased up
+  - let them go
+  - allowed
+  - move
+  - elastic
+  - hesitat
+  - stalemate
+  - committed
+  - marking
+  - shelter
+  - headwind
+  - tailwind
+  - exposed
+  - narrow
+  - single file
+  - strung out
+  - lined out
+  - fanned
+  - gutter
+  - accelerate
+  - jump
+  - dig
+  - relay
+  - turns on the front
+  - full gas
+
+# Cues that on their own make a post tactically important. Scored well above
+# ordinary cues, because missing one of these is the failure that matters.
+high_value_cues:
+  - echelon
+  - crosswind
+  - cross-wind
+  - gutter
+  - split
+  - breakaway
+  - break away
+  - the break
+  - attack
+  - lead-out
+  - leadout
+  - lead out
+  - caught
+  - crash
+  - flamme rouge
+  - gone clear
+  - goes clear
+  - off the front
+  - solo
+  - counter-attack
+  - counter attack
+  - sprint is on
+  - strung out
+  - single file
+
+# Capitalised phrases the rider-name heuristic must never treat as a rider.
+non_names:
+  - Tour de France
+  - Giro d'Italia
+  - Vuelta a Espana
+  - Vuelta a España
+  - Paris-Roubaix
+  - Milan-San Remo
+  - Milano-Sanremo
+  - Ronde van Vlaanderen
+  - Tour of Flanders
+  - Liege-Bastogne-Liege
+  - Strade Bianche
+  - Gent-Wevelgem
+  - Dwars door Vlaanderen
+  - Amstel Gold Race
+  - Fleche Wallonne
+  - World Tour
+  - WorldTour
+  - Team Time Trial
+  - King of the Mountains
+  - Green Jersey
+  - Yellow Jersey
+  - Race Radio
+  - Tour Down Under
+  - Muur van Geraardsbergen
+  - Oude Kwaremont
+  - Koppenberg
+  - Poggio
+  - Cipressa
+  - Alpe d'Huez
+  - Mont Ventoux
+
+# Tokens that cannot start a rider name. Guards the heuristic against ordinary
+# sentence-initial capitalisation.
+non_name_leading_tokens:
+  - The
+  - A
+  - An
+  - And
+  - But
+  - If
+  - It
+  - He
+  - She
+  - They
+  - We
+  - You
+  - I
+  - Now
+  - Then
+  - There
+  - This
+  - That
+  - These
+  - Those
+  - Here
+  - What
+  - When
+  - Where
+  - Why
+  - How
+  - So
+  - As
+  - At
+  - In
+  - On
+  - Of
+  - For
+  - With
+  - After
+  - Before
+  - Just
+  - Still
+  - Meanwhile
+  - However
+  - Another
+  - Both
+  - All
+  - No
+  - Not
+  - Once
+  - Only
+  - Up
+  - Down
+  - Into
+  - Over
+  - Under
+  - Inside
+  - Out
+  - Back
+  - Big
+  - Good
+  - Great
+  - Huge
+  - Monday
+  - Tuesday
+  - Wednesday
+  - Thursday
+  - Friday
+  - Saturday
+  - Sunday
+  - January
+  - February
+  - March
+  - April
+  - May
+  - June
+  - July
+  - August
+  - September
+  - October
+  - November
+  - December
+
+# Team names for the team-mention extractor. Aliases map to a canonical name.
+teams:
+  UAE Team Emirates: [UAE, UAE Emirates, UAE Team Emirates-XRG]
+  Visma-Lease a Bike: [Visma, Jumbo-Visma, Visma Lease a Bike, Team Visma]
+  INEOS Grenadiers: [INEOS, Ineos, Ineos Grenadiers, Sky]
+  Soudal Quick-Step: [Soudal, Quick-Step, QuickStep, Soudal QuickStep, Deceuninck]
+  Alpecin-Deceuninck: [Alpecin, Alpecin Deceuninck]
+  Lidl-Trek: [Lidl Trek, Trek]
+  Red Bull-BORA-hansgrohe: [BORA, Bora-hansgrohe, Red Bull Bora, Red Bull]
+  Movistar Team: [Movistar]
+  Groupama-FDJ: [Groupama, FDJ]
+  Bahrain Victorious: [Bahrain]
+  EF Education-EasyPost: [EF Education, EF]
+  Team Jayco AlUla: [Jayco, Jayco AlUla]
+  Intermarche-Wanty: [Intermarche, Wanty]
+  Astana Qazaqstan: [Astana]
+  Cofidis: []
+  Team dsm-firmenich PostNL: [DSM, dsm-firmenich]
+  Arkea-B&B Hotels: [Arkea]
+  Israel-Premier Tech: [Israel Premier Tech, IPT]
+  TotalEnergies: [Total Energies]
+  Uno-X Mobility: [Uno-X, Uno X]
+  Tudor Pro Cycling: [Tudor]
+  Q36.5 Pro Cycling: [Q36.5]
