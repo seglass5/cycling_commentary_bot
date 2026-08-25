@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -10,8 +11,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from race_bot.analysis.base import Analyser
+from race_bot.analysis.composite import CompositeAnalyser
 from race_bot.analysis.heuristic import HeuristicAnalyser
-from race_bot.config import load_settings
+from race_bot.config import Settings, load_settings
 from race_bot.models.race_state import RaceState
 from race_bot.pipeline.normalise import normalise
 from race_bot.pipeline.orchestrator import Orchestrator
@@ -25,6 +28,34 @@ app = typer.Typer(
 )
 
 
+class AnalyserChoice(StrEnum):
+    HEURISTIC = "heuristic"
+    """Keyword baseline. No model, no credentials."""
+
+    AZURE = "azure"
+    """Situation agent on Azure for race state, keyword rules for callouts."""
+
+
+def _build_analyser(choice: AnalyserChoice, settings: Settings, console: Console) -> Analyser:
+    if choice is AnalyserChoice.HEURISTIC:
+        return HeuristicAnalyser()
+
+    from race_bot.agents.provider import AzureModels, AzureNotConfigured
+
+    try:
+        models = AzureModels(settings)
+    except AzureNotConfigured as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    from race_bot.agents.situation import SituationAgent
+
+    return CompositeAnalyser(
+        state_from=SituationAgent(models.situation),
+        events_from=HeuristicAnalyser(),
+    )
+
+
 @app.command()
 def follow(
     transcript: Annotated[Path, typer.Argument(help="JSONL transcript to replay.")],
@@ -36,6 +67,9 @@ def follow(
     commentary: Annotated[bool, typer.Option(help="Show the commentary stream.")] = True,
     noise: Annotated[bool, typer.Option(help="Show posts filtered out as noise.")] = False,
     changes: Annotated[bool, typer.Option(help="Show race-state changes.")] = True,
+    analyser: Annotated[
+        AnalyserChoice, typer.Option(help="Which analyser drives race state.")
+    ] = AnalyserChoice.HEURISTIC,
 ) -> None:
     """Follow a race, calling out tactical moves as they are recognised."""
     settings = load_settings()
@@ -57,7 +91,7 @@ def follow(
     )
     orchestrator = Orchestrator(
         source=source,
-        analyser=HeuristicAnalyser(),
+        analyser=_build_analyser(analyser, settings, console),
         state=state,
         window=ContextWindow(
             max_posts=settings.window_max_posts,
@@ -156,6 +190,56 @@ def inspect(
     )
 
 
+@app.command()
+def check() -> None:
+    """Verify Azure AI Foundry credentials and both deployments.
+
+    Sends one trivial request per deployment. Run this after filling in .env,
+    before trusting a live race to it.
+    """
+    console = Console()
+    settings = load_settings()
+
+    from race_bot.agents.provider import AzureModels, AzureNotConfigured
+
+    console.print(f"endpoint:   {settings.azure_endpoint or '[red]not set[/red]'}")
+    console.print(f"api version: {settings.azure_api_version}")
+    console.print(
+        f"key:        {'set' if settings.azure_api_key else '[red]not set[/red]'}\n"
+    )
+
+    try:
+        models = AzureModels(settings)
+    except AzureNotConfigured as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+
+    from pydantic_ai import Agent
+
+    failures = 0
+    for label, deployment, model in (
+        ("situation", settings.situation_model, models.situation),
+        ("tactics", settings.tactics_model, models.tactics),
+    ):
+        try:
+            result = asyncio.run(Agent(model).run("Reply with the single word: ok"))
+        except Exception as exc:  # noqa: BLE001 - report any failure, do not raise
+            failures += 1
+            console.print(f"[red]x[/red] {label} ({deployment}): {type(exc).__name__}: {exc}")
+            continue
+
+        usage = result.usage
+        console.print(
+            f"[green]ok[/green] {label} ({deployment}) — "
+            f"{usage.input_tokens or 0} in / {usage.output_tokens or 0} out"
+        )
+
+    if failures:
+        raise typer.Exit(code=1)
+
+    console.print("\n[green]Azure AI Foundry is reachable and both deployments respond.[/green]")
+
+
 def _print_summary(console: Console, orchestrator: Orchestrator, state: RaceState) -> None:
     events = orchestrator.tracker.all_events
     console.print()
@@ -183,6 +267,21 @@ def _print_summary(console: Console, orchestrator: Orchestrator, state: RaceStat
     console.print(
         f"\n[dim]{state.posts_seen} posts seen, {len(events)} events tracked[/dim]"
     )
+    _print_agent_stats(console, orchestrator.analyser)
+
+
+def _print_agent_stats(console: Console, analyser: object) -> None:
+    """Report model usage for any analyser that tracks it."""
+    stats = getattr(analyser, "stats", None)
+    if stats is None:
+        state_from = getattr(analyser, "state_from", None)
+        stats = getattr(state_from, "stats", None)
+    if stats is None:
+        return
+
+    console.print(f"[dim]model usage: {stats.summary()}[/dim]")
+    for error in stats.errors[:3]:
+        console.print(f"[yellow]  {error}[/yellow]")
 
 
 if __name__ == "__main__":

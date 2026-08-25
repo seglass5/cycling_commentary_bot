@@ -83,10 +83,28 @@ continuously through the race rather than being recreated each tick.
 
 Splitting them keeps the per-tick cost low while letting the expensive reasoning happen
 where it earns its keep. Both are Pydantic AI `Agent`s with typed `output_type` and
-`deps_type=RaceState`, reaching Azure AI Foundry via `OpenAIChatModel` + `AzureProvider`.
+`deps_type`, reaching Azure AI Foundry via `OpenAIChatModel` + `AzureProvider`. One
+provider — and therefore one HTTP client — is shared across both.
 
 Every `TacticalEvent` carries **evidence**: the IDs of the posts that support it. An
 analysis you cannot trace back to the commentary is not worth showing.
+
+#### Surviving a five-hour race
+
+A race is a long-running process against a remote API, so the agent treats failure as
+routine rather than exceptional:
+
+- **Failures never propagate.** A timeout or API error returns an empty delta. Because
+  unset fields mean "no change", a dropped call costs one update rather than corrupting
+  the race picture — and the next tick still has the same commentary in its window.
+- **Repeated failures back off exponentially**, capped at 32 ticks. The first failure is
+  free, since transient errors are common; sustained failure stops throwing calls at a
+  dead endpoint. Recovery resets it immediately.
+- **Degradation is partial, not total.** `CompositeAnalyser` takes state from one
+  analyser and events from another, so when the model is unreachable the keyword baseline
+  keeps producing callouts instead of the race going silent.
+- **Usage is tracked** — calls, tokens, failures, skips — and reported at the end of
+  every run, so cost and reliability are visible rather than inferred.
 
 ### 5. Event lifecycle
 
@@ -107,7 +125,7 @@ keyed by pattern plus participant set. An open `BREAKAWAY_ATTEMPT` is *promoted*
 |---|---|---|
 | 1 | Models, config, replay source, CLI, console renderer — end-to-end with a stub analyser | done |
 | 2 | Normalisation + state merge — pure, heavily tested, zero LLM | done |
-| 3 | Azure + Pydantic AI wiring, situation agent | |
+| 3 | Azure + Pydantic AI wiring, situation agent | done |
 | 4 | Tactics agent, pattern KB, event lifecycle | |
 | 5 | Annotated fixtures + eval harness | |
 | 6 | Real live-blog HTTP adapter | |

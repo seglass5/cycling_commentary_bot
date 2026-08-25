@@ -9,11 +9,12 @@ sprint, the fight for position before a cobbled sector.
 
 ## Status
 
-Phases 1 and 2 of [the design](docs/DESIGN.md) are complete: the full pipeline
-runs end to end on replayed transcripts, with a keyword analyser standing in for
-the model agents that arrive in phase 3.
+Phases 1-3 of [the design](docs/DESIGN.md) are complete. The pipeline runs end
+to end on replayed transcripts, and the situation agent tracks race state through
+Azure AI Foundry. The tactics agent — which produces the tactical callouts
+themselves — arrives in phase 4; until then the keyword baseline supplies them.
 
-Everything so far is deterministic and testable without a network or an API key.
+The whole test suite runs without a network or an API key.
 
 ## Quick start
 
@@ -39,6 +40,20 @@ stays pinned at the bottom of the terminal:
 
 Useful options: `--speed 0` replays instantly, `--noise` shows what the
 pre-filter rejected, `--no-commentary` shows only the tactical analysis.
+
+### Using Azure AI Foundry
+
+Copy `.env.example` to `.env` and fill in your endpoint, key and the two
+deployment names. Then verify before trusting a race to it:
+
+```bash
+race-bot check     # one trivial request per deployment
+race-bot follow fixtures/races/kustklassieker_2026.jsonl --analyser azure
+```
+
+`--analyser azure` puts the situation agent in charge of race state. If Azure is
+unreachable the run degrades to the keyword baseline rather than failing, and the
+end-of-race summary reports calls, tokens and any failures.
 
 ### Tuning the pre-filter
 
@@ -91,7 +106,8 @@ race_bot/
   models/       CommentaryPost, RaceState, TacticalEvent, StateDelta
   sources/      LiveTextSource protocol; replay implementation
   pipeline/     normalise, window, state merge, event tracker, orchestrator
-  analysis/     Analyser protocol; keyword baseline
+  analysis/     Analyser protocol; keyword baseline; composite
+  agents/       Azure provider, prompts, situation agent
   knowledge/    lexicon.yaml — domain vocabulary as data
   render/       terminal output
 fixtures/races/ transcripts for development and testing
@@ -100,7 +116,7 @@ fixtures/races/ transcripts for development and testing
 ## Development
 
 ```bash
-pytest          # 128 tests, no network required
+pytest          # 152 tests, no network required
 ruff check .
 ```
 
