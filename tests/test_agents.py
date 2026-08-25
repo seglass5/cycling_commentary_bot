@@ -200,7 +200,7 @@ def test_error_list_is_bounded():
     """A sustained outage must not grow the error list without limit."""
     agent = SituationAgent(failing_model(RuntimeError("boom")))
     for i in range(50):
-        agent._record_failure(f"failure {i}")
+        agent.guard.record_failure(f"failure {i}")
 
     assert agent.stats.failures == 50
     assert len(agent.stats.errors) == 20

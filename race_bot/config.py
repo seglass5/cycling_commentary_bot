@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     window_max_posts: int = Field(default=25, ge=1)
     window_keep_recent: int = Field(default=8, ge=0)
     salience_threshold: float = Field(default=0.25, ge=0.0, le=1.0)
+    """How salient a post must be for the pipeline to run an analysis pass."""
+
+    tactics_salience_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
+    """How salient a post must be to call the tactics agent with no state change.
+
+    Not yet calibrated against real commentary — raise it to cut cost, lower it
+    to catch more moves that the state tracker alone would miss.
+    """
+
+    tactics_gap_shift_seconds: float = Field(default=30.0, ge=0.0)
+    """A gap moving by this much counts as a change in the race, not noise."""
 
     @property
     def azure_configured(self) -> bool:

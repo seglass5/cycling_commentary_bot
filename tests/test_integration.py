@@ -80,28 +80,9 @@ async def test_replay_is_deterministic():
     assert await run() == await run()
 
 
-class ChunkedSource:
-    """Feeds a transcript in fixed-size batches, to vary tick granularity."""
-
-    name = "chunked"
-
-    def __init__(self, posts, chunk_size: int) -> None:
-        self._chunks = [
-            posts[i : i + chunk_size] for i in range(0, len(posts), chunk_size)
-        ]
-
-    async def poll(self):
-        return self._chunks.pop(0) if self._chunks else []
-
-    @property
-    def exhausted(self) -> bool:
-        return not self._chunks
-
-    async def close(self) -> None:
-        return None
-
-
 async def _patterns_with_chunk_size(chunk_size: int) -> list[str]:
+    from tests.conftest import ChunkedSource
+
     posts = await ReplaySource(FIXTURE, speed=0).poll()
     orchestrator = Orchestrator(
         source=ChunkedSource(posts, chunk_size),

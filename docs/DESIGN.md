@@ -106,6 +106,32 @@ routine rather than exceptional:
 - **Usage is tracked** — calls, tokens, failures, skips — and reported at the end of
   every run, so cost and reliability are visible rather than inferred.
 
+#### Gating the expensive agent
+
+The tactics agent reasons over the pattern knowledge base on the stronger
+deployment, so calling it every tick would be costly and would mostly return empty
+readings. `meaningful_change` decides when to ask: a phase change, a group
+appearing or dissolving, a group's composition changing, a gap moving by more than
+30 seconds, or commentary salient enough to be worth a look regardless.
+
+Both thresholds are settings, not constants. They were chosen against a synthetic
+fixture and have not been calibrated against real commentary, so the honest
+default is to make them tunable and report the trigger rate at the end of each run.
+
+#### Validating what comes back
+
+Every proposed event is checked before it reaches the user:
+
+- **Evidence is enforced.** Post ids that do not exist are dropped, and an event
+  left with no evidence is discarded entirely. A confident-sounding read citing a
+  post nobody wrote is the failure this project most needs to avoid.
+- **Off-phase patterns are kept but recorded.** The prompt only offers patterns
+  plausible in the current phase, so the model going outside that set is a signal
+  that our own phase tracking may be wrong — worth surfacing rather than
+  suppressing.
+- **Confidence is schema-bounded**, so an out-of-range value is a validation error
+  Pydantic AI retries rather than something the renderer has to defend against.
+
 ### 5. Event lifecycle
 
 This is what separates useful from spammy. Events are tracked through:
@@ -126,7 +152,7 @@ keyed by pattern plus participant set. An open `BREAKAWAY_ATTEMPT` is *promoted*
 | 1 | Models, config, replay source, CLI, console renderer — end-to-end with a stub analyser | done |
 | 2 | Normalisation + state merge — pure, heavily tested, zero LLM | done |
 | 3 | Azure + Pydantic AI wiring, situation agent | done |
-| 4 | Tactics agent, pattern KB, event lifecycle | |
+| 4 | Tactics agent, pattern KB, event lifecycle | done |
 | 5 | Annotated fixtures + eval harness | |
 | 6 | Real live-blog HTTP adapter | |
 

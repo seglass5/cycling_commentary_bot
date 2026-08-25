@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from race_bot.models.race_state import GroupKind, RacePhase, RaceState
+from race_bot.models.tactics import TacticalEvent
 from race_bot.pipeline.state import format_gap
 
 SITUATION_INSTRUCTIONS = """\
@@ -54,8 +57,57 @@ each post — prefer those numbers over re-reading them from the prose.
 Put a one-line justification in `reasoning`.
 """
 
-TACTICS_INSTRUCTIONS_PLACEHOLDER = """\
-Reserved for the tactics agent in phase 4.
+TACTICS_INSTRUCTIONS = """\
+You are an expert cycling race analyst. You are given the current race state, the
+recent commentary, the tactical moves already being tracked, and a reference list
+of tactical patterns.
+
+Report tactical moves that are happening now. For each one, say what it is and
+why it matters — the part a viewer could not read off the screen themselves.
+
+## Evidence is mandatory
+
+Every event must cite the ids of the commentary posts that support it, in
+`evidence_post_ids`. Post ids appear in parentheses at the start of each post.
+An event citing no real post will be discarded, so cite accurately rather than
+plausibly.
+
+Only name riders and teams that appear in the commentary. Do not supply a
+startlist, a rider's reputation, or a result from your own knowledge of the sport.
+
+## Do not repeat yourself
+
+Moves already being tracked are listed. For those:
+- Say nothing if there is no real change. Silence is the correct output most ticks.
+- Re-report with a higher `status` when a move is confirmed by new evidence:
+  `suspected` -> `confirmed`.
+- Report the pattern that follows it when the situation moves on — a
+  `breakaway_attempt` that sticks becomes `breakaway_established`; a chase that
+  closes becomes `breakaway_caught`. Do not restate the earlier pattern.
+
+An empty `events` list is a perfectly good answer, and the most common one.
+
+## Live, not retrospective
+
+Commentary refers back constantly. "The crosswind section that decided the race",
+said in the closing kilometres, is a summary of something that already happened —
+not a report of crosswinds now. Report only what is happening at this moment.
+
+## Confidence
+
+- 0.8-1.0: the commentary states it directly
+- 0.5-0.8: strongly implied by several posts
+- 0.3-0.5: plausible reading of ambiguous phrasing
+- below 0.3: do not report it
+
+Check the "lowers confidence" signals before committing to a read. If the
+commentary contradicts a pattern, do not report it.
+
+## Patterns to consider
+
+Only these patterns are plausible in the current phase of this race. Prefer them.
+
+{patterns}
 """
 
 
@@ -80,6 +132,28 @@ _PHASE_HELP: dict[RacePhase, str] = {
 
 def situation_instructions() -> str:
     return SITUATION_INSTRUCTIONS.format(**_format_enum_help())
+
+
+def tactics_instructions(phase: RacePhase) -> str:
+    """Instructions with the pattern reference filtered to the current phase."""
+    from race_bot.knowledge.patterns import render_patterns
+
+    return TACTICS_INSTRUCTIONS.format(patterns=render_patterns(phase))
+
+
+def render_open_events(events: Sequence[TacticalEvent]) -> str:
+    """Moves already being tracked, so the agent advances them instead of repeating."""
+    if not events:
+        return "Nothing is currently being tracked."
+
+    lines = []
+    for event in events:
+        who = ", ".join(event.participants or event.teams) or "unnamed"
+        lines.append(
+            f"- {event.pattern.value} [{event.status.value}, "
+            f"confidence {event.confidence:.2f}]: {event.headline} ({who})"
+        )
+    return "\n".join(lines)
 
 
 def render_state(state: RaceState) -> str:

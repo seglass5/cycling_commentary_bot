@@ -9,10 +9,13 @@ sprint, the fight for position before a cobbled sector.
 
 ## Status
 
-Phases 1-3 of [the design](docs/DESIGN.md) are complete. The pipeline runs end
-to end on replayed transcripts, and the situation agent tracks race state through
-Azure AI Foundry. The tactics agent — which produces the tactical callouts
-themselves — arrives in phase 4; until then the keyword baseline supplies them.
+Phases 1-4 of [the design](docs/DESIGN.md) are complete. The pipeline runs end
+to end, the situation agent tracks race state through Azure AI Foundry, and the
+tactics agent recognises moves against a knowledge base of tactical patterns and
+explains why they matter.
+
+What remains is evaluation (phase 5) and a real live-blog adapter (phase 6).
+Prompt quality has not yet been measured against real commentary.
 
 The whole test suite runs without a network or an API key.
 
@@ -51,9 +54,18 @@ race-bot check     # one trivial request per deployment
 race-bot follow fixtures/races/kustklassieker_2026.jsonl --analyser azure
 ```
 
-`--analyser azure` puts the situation agent in charge of race state. If Azure is
-unreachable the run degrades to the keyword baseline rather than failing, and the
-end-of-race summary reports calls, tokens and any failures.
+Three analyser modes:
+
+| `--analyser` | Race state | Tactical callouts |
+|---|---|---|
+| `heuristic` (default) | keyword rules | keyword rules |
+| `azure-state` | situation agent | keyword rules |
+| `azure` | situation agent | tactics agent |
+
+The end-of-race summary reports calls, tokens, failures and the tactics gate's
+trigger rate per agent. If Azure is unreachable the run does not fail: state
+tracking degrades to empty deltas, which change nothing, and `azure-state` keeps
+producing callouts from the keyword rules.
 
 ### Tuning the pre-filter
 
@@ -91,6 +103,17 @@ transitions in it, rather than classifying posts in isolation.
 directly. It emits a `StateDelta` that deterministic merge logic applies, with
 rules that stop a forgetful response from destroying accumulated state.
 
+**Tactical knowledge is data.** `knowledge/patterns.yaml` holds all 19 patterns
+with their definitions, the phrasing commentators use, confirming and
+contradicting signals, and the phases each is plausible in. It is filtered by race
+phase before going into the prompt, which keeps the prompt small and stops the
+agent proposing a lead-out with 150km still to race. Edit the YAML when the bot
+misreads a move — not the Python.
+
+**Every callout must cite its evidence.** The tactics agent returns the ids of the
+commentary posts supporting each read. Ids that do not exist are dropped, and an
+event with no surviving evidence is discarded before it reaches the screen.
+
 **Events have a lifecycle.** `SUSPECTED → CONFIRMED → RESOLVED | FAILED`, keyed
 by pattern and participants. A breakaway forming produces the same read on
 twenty consecutive ticks; the first opens an event and the rest quietly update
@@ -107,8 +130,8 @@ race_bot/
   sources/      LiveTextSource protocol; replay implementation
   pipeline/     normalise, window, state merge, event tracker, orchestrator
   analysis/     Analyser protocol; keyword baseline; composite
-  agents/       Azure provider, prompts, situation agent
-  knowledge/    lexicon.yaml — domain vocabulary as data
+  agents/       Azure provider, prompts, situation and tactics agents
+  knowledge/    lexicon.yaml, patterns.yaml — domain knowledge as data
   render/       terminal output
 fixtures/races/ transcripts for development and testing
 ```
@@ -116,7 +139,7 @@ fixtures/races/ transcripts for development and testing
 ## Development
 
 ```bash
-pytest          # 152 tests, no network required
+pytest          # 201 tests, no network required
 ruff check .
 ```
 

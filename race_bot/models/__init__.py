@@ -17,8 +17,10 @@ from race_bot.models.tactics import (
     AnalysisResult,
     EventStatus,
     EventUpdate,
+    ProposedEvent,
     TacticalEvent,
     TacticalPattern,
+    TacticalReading,
 )
 
 __all__ = [
@@ -33,9 +35,11 @@ __all__ = [
     "GroupKind",
     "NormalisedPost",
     "PostKind",
+    "ProposedEvent",
     "RacePhase",
     "RaceState",
     "StateDelta",
     "TacticalEvent",
     "TacticalPattern",
+    "TacticalReading",
 ]

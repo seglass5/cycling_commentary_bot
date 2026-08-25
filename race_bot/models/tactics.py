@@ -139,6 +139,51 @@ class TacticalEvent(BaseModel):
         return (self.pattern.value, who)
 
 
+class ProposedEvent(BaseModel):
+    """A tactical read as the model emits it.
+
+    Deliberately narrower than `TacticalEvent`: no id, no timestamps, no history.
+    Those are the pipeline's to assign, the same way `StateDelta` is narrower
+    than `RaceState`.
+    """
+
+    pattern: TacticalPattern
+    status: EventStatus = EventStatus.SUSPECTED
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    headline: str
+    """One line stating what is happening, naming the riders or teams involved."""
+
+    explanation: str = ""
+    """Why it matters tactically — what a viewer could not read off the screen."""
+
+    participants: list[str] = Field(default_factory=list)
+    teams: list[str] = Field(default_factory=list)
+
+    evidence_post_ids: list[str] = Field(default_factory=list)
+    """Ids of the posts supporting this read. Required — unevidenced reads are dropped."""
+
+    def to_event(self, *, km_to_go: float | None = None) -> TacticalEvent:
+        return TacticalEvent(
+            pattern=self.pattern,
+            status=self.status,
+            confidence=self.confidence,
+            headline=self.headline,
+            explanation=self.explanation,
+            participants=list(self.participants),
+            teams=list(self.teams),
+            evidence_post_ids=list(self.evidence_post_ids),
+            km_to_go=km_to_go,
+        )
+
+
+class TacticalReading(BaseModel):
+    """The tactics agent's output for one call."""
+
+    events: list[ProposedEvent] = Field(default_factory=list)
+    reasoning: str = ""
+
+
 class AnalysisResult(BaseModel):
     """What an analyser returns for one tick."""
 

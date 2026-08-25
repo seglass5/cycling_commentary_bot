@@ -32,8 +32,11 @@ class AnalyserChoice(StrEnum):
     HEURISTIC = "heuristic"
     """Keyword baseline. No model, no credentials."""
 
+    AZURE_STATE = "azure-state"
+    """Situation agent for race state, keyword rules for callouts. Cheaper."""
+
     AZURE = "azure"
-    """Situation agent on Azure for race state, keyword rules for callouts."""
+    """Both agents. Tactical callouts come from the model."""
 
 
 def _build_analyser(choice: AnalyserChoice, settings: Settings, console: Console) -> Analyser:
@@ -50,9 +53,19 @@ def _build_analyser(choice: AnalyserChoice, settings: Settings, console: Console
 
     from race_bot.agents.situation import SituationAgent
 
-    return CompositeAnalyser(
-        state_from=SituationAgent(models.situation),
-        events_from=HeuristicAnalyser(),
+    situation = SituationAgent(models.situation)
+
+    if choice is AnalyserChoice.AZURE_STATE:
+        return CompositeAnalyser(state_from=situation, events_from=HeuristicAnalyser())
+
+    from race_bot.agents.tactics import TacticsAgent
+    from race_bot.analysis.two_stage import TwoStageAnalyser
+
+    return TwoStageAnalyser(
+        situation=situation,
+        tactics=TacticsAgent(models.tactics),
+        salience_threshold=settings.tactics_salience_threshold,
+        gap_shift_seconds=settings.tactics_gap_shift_seconds,
     )
 
 
@@ -100,6 +113,13 @@ def follow(
         tick_seconds=settings.tick_seconds,
         salience_threshold=settings.salience_threshold,
     )
+    from race_bot.analysis.two_stage import TwoStageAnalyser
+
+    if isinstance(orchestrator.analyser, TwoStageAnalyser):
+        # The tactics agent needs to know what is already being tracked, so it
+        # advances existing moves instead of re-reporting them.
+        orchestrator.analyser.open_events = lambda: orchestrator.tracker.open_events
+
     renderer = ConsoleRenderer(
         console=console,
         show_commentary=commentary,
@@ -271,17 +291,25 @@ def _print_summary(console: Console, orchestrator: Orchestrator, state: RaceStat
 
 
 def _print_agent_stats(console: Console, analyser: object) -> None:
-    """Report model usage for any analyser that tracks it."""
-    stats = getattr(analyser, "stats", None)
-    if stats is None:
-        state_from = getattr(analyser, "state_from", None)
-        stats = getattr(state_from, "stats", None)
-    if stats is None:
+    """Report model usage for every agent involved in the run."""
+    from race_bot.agents.runner import collect_stats
+
+    by_agent = collect_stats(analyser)
+    if not by_agent:
         return
 
-    console.print(f"[dim]model usage: {stats.summary()}[/dim]")
-    for error in stats.errors[:3]:
-        console.print(f"[yellow]  {error}[/yellow]")
+    console.print()
+    for name, stats in by_agent.items():
+        console.print(f"[dim]{name}: {stats.summary()}[/dim]")
+        for error in stats.errors[:3]:
+            console.print(f"[yellow]  {error}[/yellow]")
+
+    gate = getattr(analyser, "tactics_skipped", None)
+    if gate is not None:
+        called = getattr(analyser, "tactics_calls", 0)
+        console.print(
+            f"[dim]tactics gate: {called} triggered, {gate} ticks skipped[/dim]"
+        )
 
 
 if __name__ == "__main__":

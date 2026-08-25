@@ -1,0 +1,408 @@
+# Tactical pattern knowledge base.
+#
+# One entry per TacticalPattern. Loaded, filtered by race phase, and rendered
+# into the tactics agent's prompt. This is the file to edit when the bot
+# misreads a move — not the Python.
+#
+# Fields:
+#   definition   what the move is
+#   means        why it matters tactically; shapes the explanation shown to the user
+#   cues         phrasing commentators actually use
+#   confirms     signals that raise confidence
+#   contradicts  signals that lower it, or mean something else is happening
+#   phases       race phases where this is plausible; omit to allow any
+
+breakaway_attempt:
+  definition: >
+    Riders trying to establish a gap on the bunch, before it is clear whether the
+    move will stick.
+  means: >
+    Whether it sticks depends on who is in it and whether the teams that want a
+    sprint are willing to let it go. A move containing a dangerous rider on
+    general classification, or with no sprinters' team represented, gets chased.
+  cues:
+    - has gone clear
+    - has a gap
+    - trying to get away
+    - attacks off the front
+    - jumped away
+    - a move is going
+    - riders have slipped away
+  confirms:
+    - the gap is measured in seconds and growing
+    - the peloton visibly eases
+    - riders from different teams committing turns
+  contradicts:
+    - the bunch is lined out behind at full speed
+    - brought back within sight
+    - the same riders are named again in the bunch
+  phases: [early_attacks, breakaway_gone, controlled_chase, finale]
+
+breakaway_established:
+  definition: >
+    A breakaway the peloton has accepted, riding with a stable or growing gap.
+  means: >
+    The race settles. From here the question is arithmetic — whether the chasing
+    teams start the catch early enough. A gap of roughly ten seconds per kilometre
+    remaining is the rough threshold for a break surviving.
+  cues:
+    - the break has been given its head
+    - the gap has stabilised
+    - the peloton has sat up
+    - settled into a rhythm
+    - allowed to go
+  confirms:
+    - gap over a minute and not falling
+    - one team riding steady tempo rather than chasing
+    - composition of the break is being read out
+  contradicts:
+    - the gap is tumbling
+    - multiple teams massing on the front
+  phases: [breakaway_gone, controlled_chase]
+
+breakaway_caught:
+  definition: The break is absorbed back into the bunch.
+  means: >
+    The move is over and the race resets. Expect immediate counter-attacks — the
+    strongest riders attack precisely when the escapees are spent and the chasers
+    have just stopped working.
+  cues:
+    - has been caught
+    - reeled in
+    - brought back
+    - swallowed up
+    - all back together
+    - the race is back together
+  confirms:
+    - the gap reaches zero
+    - the escapees are named as being back in the bunch
+  contradicts:
+    - one rider has stayed clear
+    - a small gap remains
+  phases: [controlled_chase, finale, sprint]
+
+peloton_control:
+  definition: A team riding on the front, dictating the pace of the bunch.
+  means: >
+    Who is on the front tells you what kind of finish is expected. Sprinters'
+    teams riding tempo means they intend a bunch sprint; a general classification
+    team on the front usually means they are protecting a lead or setting up a
+    climb.
+  cues:
+    - on the front of the peloton
+    - driving the pace
+    - riding tempo
+    - setting the pace
+    - have taken up the chase
+  confirms:
+    - the same team named repeatedly over several updates
+    - the gap responds to their effort
+  contradicts:
+    - nobody wants to work
+    - the bunch is hesitating
+  phases: [breakaway_gone, controlled_chase, finale]
+
+chase_organised:
+  definition: A committed, cooperative chase behind the leaders.
+  means: >
+    Several teams sharing the work close a gap far faster than one. Once organised,
+    a chase usually succeeds; the interesting question becomes whether they time
+    it so precisely that a counter-attack can slip away in the final kilometres.
+  cues:
+    - the chase is organised
+    - working well together
+    - taking turns
+    - committed to the chase
+    - a proper chase behind
+  confirms:
+    - the gap falls consistently across updates
+    - riders from multiple teams named on the front
+  contradicts:
+    - looking at each other
+    - nobody is committing
+  phases: [controlled_chase, finale]
+
+chase_collapsing:
+  definition: A chase losing cohesion, with riders refusing to work.
+  means: >
+    Usually means teams disagree about who benefits. When a chase falls apart the
+    move ahead often survives — this is how breakaways win races they should not.
+  cues:
+    - looking at each other
+    - nobody wants to work
+    - the chase has fallen apart
+    - hesitation behind
+    - the cooperation has broken down
+  confirms:
+    - the gap stops falling or starts rising
+    - riders sitting up or drifting back
+  contradicts:
+    - a new team comes to the front
+    - the gap resumes falling
+  phases: [controlled_chase, finale]
+
+echelon_risk:
+  definition: >
+    Conditions that could split the bunch — crosswind, exposed road — before any
+    split has happened.
+  means: >
+    The warning matters more than the event. Teams that move to the front before
+    the exposed section stay in the race; teams that react afterwards have already
+    lost. Position going in decides everything.
+  cues:
+    - crosswind
+    - exposed section
+    - the road turns
+    - open roads ahead
+    - side wind
+    - the wind is coming from
+  confirms:
+    - teams moving up in anticipation
+    - the bunch narrowing or lining out
+    - a named exposed section approaching
+  contradicts:
+    - a tailwind
+    - sheltered roads
+    - the bunch is relaxed and bunched
+  phases: [early_attacks, breakaway_gone, controlled_chase, finale]
+
+echelons_forming:
+  definition: The bunch fanning diagonally across the road in a crosswind.
+  means: >
+    Only so many riders fit in an echelon. Everyone beyond that is in the gutter
+    with no shelter, and will be distanced. This is one of the few situations where
+    a race can be lost in under two minutes.
+  cues:
+    - echelons are forming
+    - fanned across the road
+    - in the gutter
+    - strung out single file
+    - lined out in the wind
+  confirms:
+    - groups being counted
+    - named riders described as caught out
+    - gaps opening between echelons
+  contradicts:
+    - the bunch comes back together
+    - the road turns out of the wind
+  phases: [early_attacks, breakaway_gone, controlled_chase, finale]
+
+split_confirmed:
+  definition: A genuine, sustained selection in the bunch.
+  means: >
+    What matters is which favourites made the front group and how many teammates
+    they have. A leader caught behind with no help usually cannot come back.
+  cues:
+    - there is a split
+    - the bunch has broken
+    - a gap has opened in the peloton
+    - the front group has
+    - caught out behind
+  confirms:
+    - a measured gap between the groups
+    - named riders on the wrong side
+    - the front group working together
+  contradicts:
+    - regrouping
+    - the two groups have come together
+  phases: [early_attacks, breakaway_gone, controlled_chase, finale]
+
+classics_positioning:
+  definition: >
+    Teams fighting for position ahead of a decisive point — a narrow road, a
+    climb, a cobbled sector.
+  means: >
+    On a narrow entry, being ten places back means chasing for the next five
+    kilometres. Teams burn domestiques here purely to deliver a leader to the front
+    at the right moment.
+  cues:
+    - fighting for position
+    - moving up
+    - swarming to the front
+    - elbows out
+    - the road narrows
+    - jostling
+  confirms:
+    - a named obstacle approaching
+    - multiple teams named moving up simultaneously
+    - the pace described as rising without an attack
+  contradicts:
+    - the bunch is relaxed
+    - riders drifting back for bottles
+  phases: [controlled_chase, finale]
+
+cobble_sector_approach:
+  definition: The race approaching a cobbled or gravel sector.
+  means: >
+    Entry position is nearly the whole race on pavé. The pace rises well before
+    the sector, and punctures or a mechanical at the wrong moment end a leader's
+    day regardless of form.
+  cues:
+    - the cobbles
+    - pavé
+    - sector
+    - kasseien
+    - gravel sector
+    - the approach to
+  confirms:
+    - a sector named or numbered
+    - the pace rising into it
+    - teams moving to the front
+  contradicts:
+    - the sector has been completed
+    - a tarmac section
+  phases: [controlled_chase, finale]
+
+climb_attack:
+  definition: An attack made on a gradient.
+  means: >
+    Climbs make selections that flat roads cannot, because drafting helps far less.
+    Watch who can follow the wheel and who is already out of the saddle and
+    labouring — that is the real result being decided.
+  cues:
+    - attacks on the climb
+    - kicks clear
+    - out of the saddle
+    - accelerates on the gradient
+    - dances away
+    - puts in a dig
+  confirms:
+    - riders being distanced immediately
+    - a gap opening on the climb
+  contradicts:
+    - everyone follows comfortably
+    - the group is back together over the top
+  phases: [controlled_chase, finale]
+
+counter_attack:
+  definition: An attack launched immediately after a previous move is neutralised.
+  means: >
+    The classic winning move. The chasers have just stopped working and the caught
+    escapees are spent, so a fresh rider attacking at that exact moment often gets
+    a decisive gap.
+  cues:
+    - immediate counter-attack
+    - straight over the top
+    - attacks as soon as
+    - counters
+  confirms:
+    - it follows a catch within a short interval
+    - a gap opens quickly
+  contradicts:
+    - shut down immediately
+    - the bunch reacts as one
+  phases: [controlled_chase, finale]
+
+solo_bid:
+  definition: A single rider going alone for the finish.
+  means: >
+    A rider alone against organised teams loses roughly ten to twenty seconds per
+    ten kilometres. It works when the chase is disorganised or the terrain is
+    against them — and it is the highest-variance move in the sport.
+  cues:
+    - has gone alone
+    - solo
+    - on his own
+    - has attacked out of the breakaway
+    - riding alone at the front
+  confirms:
+    - a measured gap to the rest
+    - distance to the finish stated
+  contradicts:
+    - joined by others
+    - caught
+  phases: [controlled_chase, finale]
+
+leadout_forming:
+  definition: Sprint teams beginning to organise their trains.
+  means: >
+    From here the finale is a fight for the right wheel rather than for the front.
+    A sprinter without a train has to improvise, which usually costs positions.
+  cues:
+    - lining up on the front
+    - the lead-out is taking shape
+    - massing on the front
+    - getting organised for the sprint
+    - trains forming
+  confirms:
+    - named sprint teams with multiple riders visible
+    - inside the final 15km
+  contradicts:
+    - an attack is still clear up the road with a large gap
+    - the finish is uphill and selective
+  phases: [finale]
+
+leadout_established:
+  definition: A team with a committed train at the front delivering its sprinter.
+  means: >
+    Controlling the front inside the last three kilometres is worth more than raw
+    speed. Rival sprinters must either find that wheel or come from a long way back.
+  cues:
+    - have four riders in a line
+    - the train is set
+    - fully in control at the front
+    - leading the bunch into the final
+  confirms:
+    - a team named with a count of riders
+    - inside the final 5km
+  contradicts:
+    - the train has been swamped
+    - the sprinter has lost his wheel
+  phases: [finale, sprint]
+
+sprint_launched:
+  definition: The sprint itself has opened.
+  means: >
+    Timing beats power. Opening too early, especially into a headwind, is the
+    classic way to lose a sprint from the front.
+  cues:
+    - the sprint is on
+    - launches
+    - opens up the sprint
+    - kicks for the line
+    - goes for it
+  confirms:
+    - inside the final kilometre
+    - riders named coming past
+  contradicts:
+    - still sitting up
+    - a long way from the line
+  phases: [sprint, finale]
+
+grupetto_formed:
+  definition: A group of riders riding together simply to finish inside the time limit.
+  means: >
+    Not a competitive group. Worth noting only because it tells you who has
+    abandoned the day's contest, and occasionally because the time limit itself
+    becomes a story.
+  cues:
+    - the grupetto
+    - the autobus
+    - riding to make the time limit
+    - the sprinters have formed a group behind
+  confirms:
+    - well behind the leaders
+    - sprinters or non-climbers named on a mountain stage
+  contradicts:
+    - chasing to return
+  phases: [controlled_chase, finale]
+
+crash_disruption:
+  definition: A crash affecting the shape of the race.
+  means: >
+    Beyond the riders involved, a crash splits the bunch and forces teams to burn
+    domestiques pacing leaders back on. The tactical damage often exceeds the
+    physical.
+  cues:
+    - crash
+    - riders down
+    - hit the deck
+    - touch of wheels
+    - a pile-up
+  confirms:
+    - named riders involved
+    - the bunch described as split by it
+    - riders chasing back
+  contradicts:
+    - everyone is back up and racing
+    - it happened behind the group in question
