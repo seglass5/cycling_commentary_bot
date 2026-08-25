@@ -9,13 +9,13 @@ sprint, the fight for position before a cobbled sector.
 
 ## Status
 
-Phases 1-4 of [the design](docs/DESIGN.md) are complete. The pipeline runs end
-to end, the situation agent tracks race state through Azure AI Foundry, and the
-tactics agent recognises moves against a knowledge base of tactical patterns and
-explains why they matter.
+Phases 1-4 and 6 of [the design](docs/DESIGN.md) are complete. The pipeline runs
+end to end on live sources or replayed transcripts, the situation agent tracks
+race state through Azure AI Foundry, and the tactics agent recognises moves
+against a knowledge base of tactical patterns and explains why they matter.
 
-What remains is evaluation (phase 5) and a real live-blog adapter (phase 6).
-Prompt quality has not yet been measured against real commentary.
+What remains is evaluation (phase 5). Prompt quality has not yet been measured
+against real commentary — that is the largest open question in the project.
 
 The whole test suite runs without a network or an API key.
 
@@ -66,6 +66,37 @@ The end-of-race summary reports calls, tokens, failures and the tactics gate's
 trigger rate per agent. If Azure is unreachable the run does not fail: state
 tracking degrades to empty deltas, which change nothing, and `azure-state` keeps
 producing callouts from the keyword rules.
+
+### Following a live race
+
+```bash
+# An RSS or Atom feed — no site configuration needed
+race-bot follow --url https://example.com/live/feed.xml
+
+# A live blog page, using a site config for its selectors
+race-bot follow --url https://example.com/live/race --site-config mysite.yaml
+
+# Keep what you see; the transcript replays as a fixture afterwards
+race-bot follow --url https://... --site-config mysite.yaml --record-to races/today.jsonl
+```
+
+**Which sites to poll is your decision.** No site configuration ships enabled —
+see [`race_bot/sources/sites/README.md`](race_bot/sources/sites/README.md) for
+what to check first. The bot identifies itself, enforces robots.txt with no
+override, honours `Crawl-delay`, and uses conditional requests so an unchanged
+page costs a 304 rather than a full fetch.
+
+### Building a corpus
+
+```bash
+race-bot record --url https://... --site-config mysite.yaml --out races/today.jsonl
+race-bot inspect races/today.jsonl        # check the selectors worked
+race-bot follow races/today.jsonl         # replay it
+```
+
+`record` writes the same format `follow` replays, so a recorded race becomes a
+fixture with no conversion step. This is how you get the real transcripts that
+honest evaluation needs.
 
 ### Tuning the pre-filter
 
@@ -127,7 +158,8 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the reasoning in full.
 ```
 race_bot/
   models/       CommentaryPost, RaceState, TacticalEvent, StateDelta
-  sources/      LiveTextSource protocol; replay implementation
+  sources/      LiveTextSource protocol; replay, live blog, feed, recording
+  sources/sites/  site configs — none shipped; see the README there
   pipeline/     normalise, window, state merge, event tracker, orchestrator
   analysis/     Analyser protocol; keyword baseline; composite
   agents/       Azure provider, prompts, situation and tactics agents
@@ -139,7 +171,7 @@ fixtures/races/ transcripts for development and testing
 ## Development
 
 ```bash
-pytest          # 201 tests, no network required
+pytest          # 270 tests, no network required
 ruff check .
 ```
 

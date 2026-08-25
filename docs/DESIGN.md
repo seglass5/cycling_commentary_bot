@@ -56,8 +56,39 @@ live-blog adapter are interchangeable.
 a speed factor — a five-hour race replays in five minutes. This makes the whole system
 deterministically testable.
 
+`LiveBlogSource` polls a page and extracts posts using CSS selectors held in a YAML site
+config. Adding a site is data, not code: the fragile part is selectors against markup
+somebody else controls, and that should be fixable without a release. `FeedSource` reads
+RSS or Atom, which is the option with no terms-of-service ambiguity.
+
+`RecordingSource` wraps any source and appends what it yields to a JSONL transcript, in
+exactly the format `ReplaySource` reads. That closes the loop the project needs: follow a
+real race, keep the transcript, replay it deterministically, evaluate against it.
+
 Posts are deduped by content hash and ordered by timestamp. A cursor is checkpointed so a
 restart does not reprocess the race.
+
+#### Politeness is not optional
+
+Everything that touches a third-party site goes through one fetcher, so the rules cannot be
+bypassed by a site adapter:
+
+- **robots.txt is enforced, with no override flag.** A missing robots.txt grants access by
+  convention; a 5xx or an unreachable one fails *closed*, because not being able to read
+  the rules is not permission to guess at them.
+- Requests are spaced by a configured minimum or the host's own `Crawl-delay`, whichever is
+  longer.
+- Conditional requests mean an unchanged live blog costs a 304, not a page.
+- The User-Agent identifies the bot and carries a contact URL.
+- 429 and 5xx responses back off, honouring `Retry-After`.
+
+Deduplication is belt-and-braces: posts are tracked by site id *and* by a fingerprint of
+their text. Integration testing turned up a live blog numbering posts by position in a
+growing list, so the same post arrived with a new id on every poll — trusting the site's id
+alone filled the recording with duplicates.
+
+**Which sites to poll is the operator's decision.** No site configuration ships enabled,
+and `sources/sites/README.md` sets out what to check before adding one.
 
 ### 2. Deterministic pre-filter
 
@@ -154,7 +185,7 @@ keyed by pattern plus participant set. An open `BREAKAWAY_ATTEMPT` is *promoted*
 | 3 | Azure + Pydantic AI wiring, situation agent | done |
 | 4 | Tactics agent, pattern KB, event lifecycle | done |
 | 5 | Annotated fixtures + eval harness | |
-| 6 | Real live-blog HTTP adapter | |
+| 6 | Real live-blog HTTP adapter | done |
 
 Phases 1–2 are fully testable without a model. That is deliberate: most of the bugs live
 there, and they should be caught by fast deterministic tests rather than by staring at

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -37,6 +37,55 @@ class AnalyserChoice(StrEnum):
 
     AZURE = "azure"
     """Both agents. Tactical callouts come from the model."""
+
+
+def _build_source(
+    console: Console,
+    *,
+    transcript: Path | None,
+    url: str,
+    site: str,
+    speed: float,
+    site_config: Path | None = None,
+) -> Any:
+    """A replayed transcript, a live blog, or a feed."""
+    if bool(transcript) == bool(url):
+        console.print("[red]Give either a transcript path or --url, not both.[/red]")
+        raise typer.Exit(code=2)
+
+    if transcript is not None:
+        try:
+            source = ReplaySource(transcript, speed=speed)
+        except (FileNotFoundError, ValueError) as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        if source.post_count == 0:
+            console.print(f"[yellow]{transcript} contains no posts.[/yellow]")
+            raise typer.Exit(code=1)
+        return source
+
+    if site or site_config:
+        from race_bot.sources.liveblog import (
+            LiveBlogSource,
+            SiteConfigError,
+            load_site_config,
+            load_site_config_file,
+        )
+
+        try:
+            config = (
+                load_site_config_file(site_config)
+                if site_config
+                else load_site_config(site)
+            )
+        except SiteConfigError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
+        return LiveBlogSource(url, config)
+
+    from race_bot.sources.feed import FeedSource
+
+    return FeedSource(url)
 
 
 def _build_analyser(choice: AnalyserChoice, settings: Settings, console: Console) -> Analyser:
@@ -71,7 +120,22 @@ def _build_analyser(choice: AnalyserChoice, settings: Settings, console: Console
 
 @app.command()
 def follow(
-    transcript: Annotated[Path, typer.Argument(help="JSONL transcript to replay.")],
+    transcript: Annotated[
+        Path | None,
+        typer.Argument(help="JSONL transcript to replay. Omit when using --url."),
+    ] = None,
+    url: Annotated[
+        str, typer.Option(help="Live blog or feed URL to follow instead of a transcript.")
+    ] = "",
+    site: Annotated[
+        str, typer.Option(help="Site config name for --url. Omit for an RSS/Atom feed.")
+    ] = "",
+    site_config: Annotated[
+        Path | None, typer.Option(help="Site config file path, instead of --site.")
+    ] = None,
+    record_to: Annotated[
+        Path | None, typer.Option(help="Also write everything seen to this JSONL file.")
+    ] = None,
     speed: Annotated[
         float, typer.Option(help="Replay speed multiplier. 0 replays instantly.")
     ] = 60.0,
@@ -88,20 +152,29 @@ def follow(
     settings = load_settings()
     console = Console()
 
-    try:
-        source = ReplaySource(transcript, speed=speed)
-    except (FileNotFoundError, ValueError) as exc:
-        console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1) from exc
-
-    if source.post_count == 0:
-        console.print(f"[yellow]{transcript} contains no posts.[/yellow]")
-        raise typer.Exit(code=1)
-
-    state = RaceState(
-        race_name=race_name or transcript.stem.replace("_", " "),
-        stage=stage or None,
+    source = _build_source(
+        console,
+        transcript=transcript,
+        url=url,
+        site=site,
+        site_config=site_config,
+        speed=speed,
     )
+    if record_to is not None:
+        from race_bot.sources.recording import RecordingSource
+
+        source = RecordingSource(source, record_to)
+        console.print(f"[dim]recording to {record_to}[/dim]")
+
+    default_name = transcript.stem.replace("_", " ") if transcript else source.name
+    state = RaceState(race_name=race_name or default_name, stage=stage or None)
+    live = transcript is None
+    tick_seconds = (
+        getattr(getattr(source, "config", None), "poll_seconds", 30.0)
+        if live
+        else settings.tick_seconds
+    )
+
     orchestrator = Orchestrator(
         source=source,
         analyser=_build_analyser(analyser, settings, console),
@@ -110,7 +183,7 @@ def follow(
             max_posts=settings.window_max_posts,
             keep_recent=settings.window_keep_recent,
         ),
-        tick_seconds=settings.tick_seconds,
+        tick_seconds=tick_seconds,
         salience_threshold=settings.salience_threshold,
     )
     from race_bot.analysis.two_stage import TwoStageAnalyser
@@ -208,6 +281,82 @@ def inspect(
         + ", ".join(f"{k}: {v}" for k, v in sorted(kinds.items()))
         + "[/dim]"
     )
+
+
+@app.command()
+def record(
+    url: Annotated[str, typer.Option(help="Live blog or feed URL to record.")],
+    out: Annotated[Path, typer.Option(help="JSONL transcript to write.")],
+    site: Annotated[
+        str, typer.Option(help="Site config name. Omit for an RSS/Atom feed.")
+    ] = "",
+    site_config: Annotated[
+        Path | None, typer.Option(help="Site config file path, instead of --site.")
+    ] = None,
+    polls: Annotated[
+        int, typer.Option(help="Stop after this many polls. 0 records until interrupted.")
+    ] = 0,
+    interval: Annotated[float, typer.Option(help="Seconds between polls.")] = 30.0,
+) -> None:
+    """Record a live source to a transcript, without analysing it.
+
+    Use this to build an evaluation corpus from real races, and to work out a
+    site's selectors — record a few polls, then `race-bot inspect` the result.
+    """
+    console = Console()
+
+    from race_bot.sources.recording import RecordingSource
+
+    inner = _build_source(
+        console, transcript=None, url=url, site=site, site_config=site_config, speed=0
+    )
+    source = RecordingSource(inner, out)
+
+    async def run() -> None:
+        poll_count = 0
+        try:
+            while polls == 0 or poll_count < polls:
+                posts = await source.poll()
+                poll_count += 1
+                console.print(
+                    f"[dim]poll {poll_count}: {len(posts)} new "
+                    f"({source.recorded} total)[/dim]"
+                )
+                for post in posts:
+                    console.print(f"  {post.timestamp.strftime('%H:%M')}  {post.text[:90]}")
+                if polls and poll_count >= polls:
+                    break
+                await asyncio.sleep(interval)
+        finally:
+            await source.close()
+
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        console.print("\n[dim]stopped[/dim]")
+
+    errors = getattr(inner, "poll_errors", [])
+    if errors:
+        console.print(f"\n[yellow]{len(errors)} poll errors:[/yellow]")
+        for error in errors[:5]:
+            console.print(f"[yellow]  {error}[/yellow]")
+
+    console.print(f"\n[green]{source.recorded} posts written to {out}[/green]")
+
+
+@app.command()
+def sites() -> None:
+    """List the site configurations available to --site."""
+    from race_bot.sources.liveblog import SITES_DIR, available_sites
+
+    console = Console()
+    configured = available_sites()
+    if not configured:
+        console.print("[yellow]No sites configured.[/yellow]")
+        console.print(f"[dim]Add one in {SITES_DIR} — see the README there first.[/dim]")
+        return
+    for name in configured:
+        console.print(f"  {name}")
 
 
 @app.command()

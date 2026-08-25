@@ -1,0 +1,19 @@
+# Copy to <yoursite>.yaml and fill in. See README.md — and read the site's terms
+# of service before you do.
+
+post_selector: "article.live-post"
+text_selector: ".post-body"
+
+timestamp_selector: "time"
+timestamp_attribute: datetime
+timestamp_format: iso
+
+author_selector: ".byline"
+id_attribute: "data-post-id"
+
+poll_seconds: 30
+max_posts_per_poll: 200
+
+notes: >
+  Anything worth remembering about this site — when the markup last changed,
+  whether the feed is a better option, who you asked for permission.
